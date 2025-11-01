@@ -1,10 +1,12 @@
 // Configuration - Backend API endpoints
-const API_BASE_URL = window.location.origin;
+// For GitHub Pages deployment, use the deployed backend URL
+// For local development, use the same origin
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE_URL = isProduction 
+    ? 'https://socializing-lilac.vercel.app' // Your deployed Vercel backend URL
+    : window.location.origin;
 const API_ANALYZE_URL = `${API_BASE_URL}/api/analyze-interaction`;
 const API_QUEST_URL = `${API_BASE_URL}/api/generate-quest`;
-const API_AUTH_CHECK = `${API_BASE_URL}/api/auth/check`;
-const API_USER_DATA = `${API_BASE_URL}/api/user/data`;
-const API_AUTH_LOGOUT = `${API_BASE_URL}/api/auth/logout`;
 
 // RXP thresholds for bond levels (cumulative)
 const BOND_LEVEL_THRESHOLDS = {
@@ -43,16 +45,97 @@ let gameData = {
     }
 };
 
-// Initialize App
-document.addEventListener('DOMContentLoaded', async () => {
-    // Check authentication first
-    const isAuthenticated = await checkAuthentication();
-    if (!isAuthenticated) {
-        window.location.href = '/';
+// Password Protection Configuration
+const SITE_PASSWORD = 'SocialQuest2024'; // Change this to your desired password
+const AUTH_STORAGE_KEY = 'socialquest_authenticated';
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// Check if user is authenticated
+function isAuthenticated() {
+    const authData = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!authData) return false;
+    
+    try {
+        const { timestamp } = JSON.parse(authData);
+        const now = Date.now();
+        
+        // Check if session has expired
+        if (now - timestamp > SESSION_TIMEOUT) {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// Set authentication status
+function setAuthenticated() {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+        timestamp: Date.now()
+    }));
+}
+
+// Initialize Password Protection
+function initPasswordProtection() {
+    const passwordOverlay = document.getElementById('passwordOverlay');
+    const mainContainer = document.getElementById('mainContainer');
+    const passwordForm = document.getElementById('passwordForm');
+    const passwordInput = document.getElementById('passwordInput');
+    const passwordError = document.getElementById('passwordError');
+    const passwordBox = document.querySelector('.password-box');
+    
+    // Check if already authenticated
+    if (isAuthenticated()) {
+        passwordOverlay.style.display = 'none';
+        mainContainer.style.display = 'block';
+        // Initialize the app if already authenticated
+        initializeApp();
         return;
     }
     
-    await loadData();
+    // Show password overlay
+    passwordOverlay.style.display = 'flex';
+    mainContainer.style.display = 'none';
+    
+    // Handle password form submission
+    passwordForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const enteredPassword = passwordInput.value.trim();
+        
+        // Check password (in production, this would be verified via API)
+        if (enteredPassword === SITE_PASSWORD) {
+            setAuthenticated();
+            passwordOverlay.style.display = 'none';
+            mainContainer.style.display = 'block';
+            passwordInput.value = '';
+            passwordError.textContent = '';
+            
+            // Initialize the app
+            initializeApp();
+        } else {
+            passwordError.textContent = 'Incorrect password. Please try again.';
+            passwordInput.value = '';
+            passwordInput.focus();
+            
+            // Add shake animation
+            if (passwordBox) {
+                passwordBox.style.animation = 'none';
+                setTimeout(() => {
+                    passwordBox.style.animation = 'shake 0.5s ease';
+                }, 10);
+            }
+        }
+    });
+    
+    // Focus on password input
+    passwordInput.focus();
+}
+
+// Initialize App (only called after password is verified)
+function initializeApp() {
+    loadData();
     applyTheme(); // Apply saved theme first
     initializeTabs();
     initializeEventListeners();
@@ -64,126 +147,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStreak();
     checkReminders();
     requestNotificationPermission();
-    
-    // Add logout button handler
-    addLogoutButton();
+}
+
+// Initialize Password Protection on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initPasswordProtection();
 });
 
-// Authentication check
-async function checkAuthentication() {
-    try {
-        const response = await fetch(API_AUTH_CHECK, {
-            credentials: 'include'
-        });
-        const data = await response.json();
-        return data.authenticated === true;
-    } catch (error) {
-        console.error('Auth check failed:', error);
-        return false;
-    }
+// Local Storage
+function saveData() {
+    localStorage.setItem('socialQuestData', JSON.stringify(gameData));
 }
 
-// Add logout functionality
-function addLogoutButton() {
-    const headerActions = document.querySelector('.header-actions');
-    if (headerActions) {
-        const logoutBtn = document.createElement('button');
-        logoutBtn.className = 'btn btn-secondary';
-        logoutBtn.textContent = '🚪 Logout';
-        logoutBtn.title = 'Logout';
-        logoutBtn.addEventListener('click', async () => {
-            if (confirm('Are you sure you want to logout?')) {
-                try {
-                    await fetch(API_AUTH_LOGOUT, {
-                        method: 'POST',
-                        credentials: 'include'
-                    });
-                    window.location.href = '/';
-                } catch (error) {
-                    console.error('Logout error:', error);
-                    // Still redirect even if logout fails
-                    window.location.href = '/';
-                }
-            }
-        });
-        headerActions.appendChild(logoutBtn);
-    }
-}
-
-// Backend Storage
-async function saveData() {
-    try {
-        await fetch(API_USER_DATA, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify(gameData)
-        });
-    } catch (error) {
-        console.error('Error saving data:', error);
-        // Fallback to localStorage if backend fails
-        localStorage.setItem('socialQuestData', JSON.stringify(gameData));
-    }
-}
-
-async function loadData() {
-    try {
-        const response = await fetch(API_USER_DATA, {
-            credentials: 'include'
-        });
+function loadData() {
+    const saved = localStorage.getItem('socialQuestData');
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        gameData = { ...gameData, ...parsed };
+        // Ensure new fields exist
+        if (!gameData.streak) gameData.streak = { current: 0, lastInteractionDate: null, longest: 0, milestones: [] };
+        if (!gameData.reminders) gameData.reminders = [];
+        if (!gameData.settings) gameData.settings = { soundEnabled: true, notificationsEnabled: false, theme: 'dark' };
         
-        if (response.ok) {
-            const result = await response.json();
-            if (result.success && result.data) {
-                gameData = { ...gameData, ...result.data };
-            }
-        } else {
-            // If unauthorized, redirect to login
-            if (response.status === 401) {
-                window.location.href = '/';
-                return;
-            }
-            // Fallback to localStorage
-            const saved = localStorage.getItem('socialQuestData');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                gameData = { ...gameData, ...parsed };
-            }
+        // Convert date strings back to Date objects
+        gameData.interactions.forEach(interaction => {
+            interaction.date = new Date(interaction.date);
+            if (!interaction.tags) interaction.tags = [];
+            if (!interaction.photos) interaction.photos = [];
+        });
+        gameData.quests.forEach(quest => {
+            if (quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
+        });
+        if (gameData.streak.lastInteractionDate) {
+            gameData.streak.lastInteractionDate = new Date(gameData.streak.lastInteractionDate);
         }
-    } catch (error) {
-        console.error('Error loading data:', error);
-        // Fallback to localStorage
-        const saved = localStorage.getItem('socialQuestData');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            gameData = { ...gameData, ...parsed };
-        }
+        gameData.reminders.forEach(reminder => {
+            if (reminder.date) reminder.date = new Date(reminder.date);
+        });
     }
     
-    // Ensure new fields exist
-    if (!gameData.streak) gameData.streak = { current: 0, lastInteractionDate: null, longest: 0, milestones: [] };
-    if (!gameData.reminders) gameData.reminders = [];
-    if (!gameData.settings) gameData.settings = { soundEnabled: true, notificationsEnabled: false, theme: 'dark' };
-    
-    // Convert date strings back to Date objects
-    gameData.interactions.forEach(interaction => {
-        interaction.date = new Date(interaction.date);
-        if (!interaction.tags) interaction.tags = [];
-        if (!interaction.photos) interaction.photos = [];
-    });
-    gameData.quests.forEach(quest => {
-        if (quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
-    });
-    if (gameData.streak.lastInteractionDate) {
-        gameData.streak.lastInteractionDate = new Date(gameData.streak.lastInteractionDate);
-    }
-    gameData.reminders.forEach(reminder => {
-        if (reminder.date) reminder.date = new Date(reminder.date);
-    });
-    
-    // Load settings (still use localStorage for settings as fallback)
+    // Load settings
     const settings = localStorage.getItem('socialQuestSettings');
     if (settings) {
         gameData.settings = { ...gameData.settings, ...JSON.parse(settings) };
@@ -1189,9 +1192,6 @@ function initializeNewFeatures() {
 }
 
 function saveSettings() {
-    // Settings are saved as part of gameData
-    saveData();
-    // Also save to localStorage as fallback
     localStorage.setItem('socialQuestSettings', JSON.stringify(gameData.settings));
 }
 

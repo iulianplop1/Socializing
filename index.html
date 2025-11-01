@@ -8,7 +8,24 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-    <div class="container">
+    <!-- Password Protection Overlay -->
+    <div id="passwordOverlay" class="password-overlay">
+        <div class="password-container">
+            <div class="password-box">
+                <h1>🎮 SocialQuest</h1>
+                <p class="password-subtitle">Enter password to access</p>
+                <form id="passwordForm">
+                    <div class="form-group">
+                        <input type="password" id="passwordInput" placeholder="Password" autocomplete="off" autofocus required>
+                        <div id="passwordError" class="password-error"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Enter</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer" style="display: none;">
         <!-- Header -->
         <header class="header">
             <div class="header-content">

@@ -1,5 +1,7 @@
 node_modules/
-users.json
-user_data/
-.env
+.DS_Store
 *.log
+.env
+.env.local
+.vercel
+
