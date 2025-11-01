@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocialQuest - Gamify Your Social Life</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🎮 SocialQuest</h1>
+                <div class="player-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Social Level</span>
+                        <span class="stat-value" id="socialLevel">1</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total RXP</span>
+                        <span class="stat-value" id="totalRXP">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Allies</span>
+                        <span class="stat-value" id="alliesCount">0</span>
+                    </div>
+                    <div class="stat-item streak-item">
+                        <span class="stat-label">🔥 Streak</span>
+                        <span class="stat-value" id="streakCount">0</span>
+                        <span class="streak-days">days</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary quick-log-btn" id="quickLogBtn" title="Quick Log">⚡ Quick Log</button>
+                    <button class="btn btn-secondary" id="themeToggleBtn" title="Toggle Theme">🌓</button>
+                    <button class="btn btn-secondary" id="settingsBtn" title="Settings">⚙️</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="allies">👥 Allies</button>
+            <button class="tab-btn" data-tab="interactions">💬 Interactions</button>
+            <button class="tab-btn" data-tab="quests">⚔️ Quests</button>
+            <button class="tab-btn" data-tab="leaderboard">🏅 Leaderboard</button>
+            <button class="tab-btn" data-tab="insights">💡 Insights</button>
+            <button class="tab-btn" data-tab="memories">📸 Memories</button>
+            <button class="tab-btn" data-tab="achievements">🏆 Achievements</button>
+        </nav>
+
+        <!-- Allies Tab -->
+        <div id="allies-tab" class="tab-content active">
+            <div class="section-header">
+                <h2>Your Allies</h2>
+                <button class="btn btn-primary" id="addAllyBtn">+ Log New Ally</button>
+            </div>
+            <div id="alliesList" class="allies-grid"></div>
+        </div>
+
+        <!-- Interactions Tab -->
+        <div id="interactions-tab" class="tab-content">
+            <div class="section-header">
+                <h2>Log Interaction</h2>
+            </div>
+            <div class="interaction-form-container">
+                <form id="interactionForm" class="interaction-form">
+                    <div class="form-group">
+                        <label for="interactionAlly">Select Ally</label>
+                        <select id="interactionAlly" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionTemplate">Quick Template</label>
+                        <select id="interactionTemplate">
+                            <option value="">Custom</option>
+                            <option value="coffee">☕ Coffee Meetup</option>
+                            <option value="birthday">🎂 Birthday Call</option>
+                            <option value="game">🎮 Gaming Session</option>
+                            <option value="meal">🍽️ Meal Together</option>
+                            <option value="text">💬 Quick Text</option>
+                            <option value="event">🎉 Event/Party</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionType">Interaction Type</label>
+                        <select id="interactionType" required>
+                            <option value="text">💬 Text Message</option>
+                            <option value="call">📞 Phone Call</option>
+                            <option value="hangout">👥 Hangout</option>
+                            <option value="event">🎉 Event/Party</option>
+                            <option value="other">✨ Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionTags">Tags (comma-separated)</label>
+                        <input type="text" id="interactionTags" placeholder="family, work, hobby">
+                        <small class="form-hint">Examples: family, work, school, hobby, best-friend</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionPhotos">Photos (optional)</label>
+                        <input type="file" id="interactionPhotos" accept="image/*" multiple>
+                        <div id="photoPreview" class="photo-preview"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionNotes">Notes (Describe the interaction)</label>
+                        <textarea id="interactionNotes" rows="4" placeholder="What happened? How did it go?" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionDuration">Duration (hours)</label>
+                        <input type="number" id="interactionDuration" min="0" step="0.5" value="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="interactionQuality">Overall Quality</label>
+                        <div class="quality-radio">
+                            <label><input type="radio" name="quality" value="negative" required> 😞 Negative</label>
+                            <label><input type="radio" name="quality" value="neutral" required> 😐 Neutral</label>
+                            <label><input type="radio" name="quality" value="positive" required checked> 😊 Positive</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Log Interaction</button>
+                </form>
+            </div>
+            <div class="section-header">
+                <h2>Recent Interactions</h2>
+            </div>
+            <div id="interactionsList" class="interactions-list"></div>
+        </div>
+
+        <!-- Quests Tab -->
+        <div id="quests-tab" class="tab-content">
+            <div class="section-header">
+                <h2>Active Quests</h2>
+                <button class="btn btn-secondary" id="generateQuestBtn">🤖 Generate AI Quest</button>
+            </div>
+            <div id="questsList" class="quests-list"></div>
+        </div>
+
+        <!-- Leaderboard Tab -->
+        <div id="leaderboard-tab" class="tab-content">
+            <div class="section-header">
+                <h2>🏅 Leaderboard</h2>
+            </div>
+            <div class="leaderboard-tabs">
+                <button class="leaderboard-filter active" data-filter="rxp">Top by RXP</button>
+                <button class="leaderboard-filter" data-filter="bond">Highest Bond Level</button>
+                <button class="leaderboard-filter" data-filter="improved">Most Improved</button>
+                <button class="leaderboard-filter" data-filter="recent">Most Recent</button>
+            </div>
+            <div id="leaderboardList" class="leaderboard-list"></div>
+        </div>
+
+        <!-- Insights Tab -->
+        <div id="insights-tab" class="tab-content">
+            <div class="section-header">
+                <h2>💡 Social Insights</h2>
+            </div>
+            <div class="insights-grid">
+                <div class="insight-card">
+                    <h3>🌟 Strongest Bonds</h3>
+                    <div id="strongestBonds"></div>
+                </div>
+                <div class="insight-card warning">
+                    <h3>⚠️ Needs Attention</h3>
+                    <div id="needsAttention"></div>
+                </div>
+                <div class="insight-card">
+                    <h3>🎯 Upcoming Milestones</h3>
+                    <div id="upcomingMilestones"></div>
+                </div>
+                <div class="insight-card">
+                    <h3>📅 Reminders</h3>
+                    <div id="remindersList"></div>
+                    <button class="btn btn-secondary" id="addReminderBtn">+ Add Reminder</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memories Tab -->
+        <div id="memories-tab" class="tab-content">
+            <div class="section-header">
+                <h2>📸 Memory Gallery</h2>
+                <div class="memory-filters">
+                    <select id="memoryAllyFilter">
+                        <option value="">All Allies</option>
+                    </select>
+                    <select id="memoryTypeFilter">
+                        <option value="">All Types</option>
+                        <option value="text">Text</option>
+                        <option value="call">Call</option>
+                        <option value="hangout">Hangout</option>
+                        <option value="event">Event</option>
+                    </select>
+                </div>
+            </div>
+            <div id="memoriesTimeline" class="memories-timeline"></div>
+        </div>
+
+        <!-- Achievements Tab -->
+        <div id="achievements-tab" class="tab-content">
+            <div class="section-header">
+                <h2>Your Achievements</h2>
+            </div>
+            <div id="achievementsList" class="achievements-grid"></div>
+        </div>
+    </div>
+
+    <!-- Confetti Canvas -->
+    <canvas id="confettiCanvas"></canvas>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing...</div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Modals -->
+    <!-- Add/Edit Ally Modal -->
+    <div id="allyModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="allyModalTitle">Log New Ally</h2>
+            <form id="allyForm">
+                <input type="hidden" id="allyId">
+                <div class="form-group">
+                    <label for="allyName">Name *</label>
+                    <input type="text" id="allyName" required>
+                </div>
+                <div class="form-group">
+                    <label for="allyImage">Character Picture</label>
+                    <input type="file" id="allyImage" accept="image/*">
+                    <div id="allyImagePreview" style="margin-top: 12px; display: none;">
+                        <img id="allyImagePreviewImg" style="width: 200px; height: 200px; border-radius: 50%; border: 2px solid var(--border-color); object-fit: cover;">
+                        <button type="button" class="btn btn-danger" onclick="removeAllyImage()" style="margin-top: 8px; font-size: 0.875rem; padding: 6px 12px;">Remove Image</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="allyAge">Age</label>
+                    <input type="number" id="allyAge" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="allyHobbies">Hobbies (comma-separated)</label>
+                    <input type="text" id="allyHobbies" placeholder="Reading, Gaming, Hiking">
+                </div>
+                <div class="form-group">
+                    <label for="allyLikes">Likes</label>
+                    <textarea id="allyLikes" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="allyDislikes">Dislikes</label>
+                    <textarea id="allyDislikes" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="allyOtherInfo">Other Information</label>
+                    <textarea id="allyOtherInfo" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Ally</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ally Detail Modal -->
+    <div id="allyDetailModal" class="modal">
+        <div class="modal-content large">
+            <span class="close">&times;</span>
+            <div id="allyDetailContent"></div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>⚙️ Settings</h2>
+            <div class="settings-content">
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="soundEnabled">
+                        Enable Sound Effects
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="notificationsEnabled">
+                        Enable Browser Notifications
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="themeToggle">
+                        Light Theme (coming soon)
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <h3>Export/Import Data</h3>
+                    <button class="btn btn-secondary" id="exportJsonBtn">📥 Export JSON</button>
+                    <button class="btn btn-secondary" id="exportCsvBtn">📊 Export CSV</button>
+                    <label class="btn btn-secondary">
+                        📤 Import Data
+                        <input type="file" id="importFile" accept=".json" style="display: none;">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Log Modal -->
+    <div id="quickLogModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>⚡ Quick Log</h2>
+            <form id="quickLogForm">
+                <div class="form-group">
+                    <label for="quickLogAlly">Ally</label>
+                    <select id="quickLogAlly" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="quickLogType">Type</label>
+                    <select id="quickLogType" required>
+                        <option value="text">💬 Text</option>
+                        <option value="call">📞 Call</option>
+                        <option value="hangout">👥 Hangout</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="quickLogNotes">Quick Note</label>
+                    <textarea id="quickLogNotes" rows="2" placeholder="Brief description..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Log It!</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reminder Modal -->
+    <div id="reminderModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>📅 Add Reminder</h2>
+            <form id="reminderForm">
+                <div class="form-group">
+                    <label for="reminderAlly">Ally (optional)</label>
+                    <select id="reminderAlly">
+                        <option value="">All Allies</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reminderType">Type</label>
+                    <select id="reminderType" required>
+                        <option value="contact">Haven't talked in X days</option>
+                        <option value="birthday">Birthday</option>
+                        <option value="weekly">Weekly Check-in</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reminderMessage">Message</label>
+                    <input type="text" id="reminderMessage" placeholder="Reminder text">
+                </div>
+                <div class="form-group">
+                    <label for="reminderDays">Days Threshold (for contact reminders)</label>
+                    <input type="number" id="reminderDays" value="7" min="1">
+                </div>
+                <button type="submit" class="btn btn-primary">Save Reminder</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
