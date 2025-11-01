@@ -8,20 +8,16 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-    <!-- Password Protection Overlay -->
-    <div id="passwordOverlay" class="password-overlay">
-        <div class="password-container">
-            <div class="password-box">
-                <h1>🎮 SocialQuest</h1>
-                <p class="password-subtitle">Enter password to access</p>
-                <form id="passwordForm">
-                    <div class="form-group">
-                        <input type="password" id="passwordInput" placeholder="Password" autocomplete="off" autofocus required>
-                        <div id="passwordError" class="password-error"></div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Enter</button>
-                </form>
-            </div>
+    <!-- Password Protection Modal -->
+    <div id="passwordModal" class="password-modal">
+        <div class="password-modal-content">
+            <h2>🔒 Access Restricted</h2>
+            <p>Please enter the password to continue</p>
+            <form id="passwordForm">
+                <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off" required autofocus>
+                <button type="submit" class="btn btn-primary">Access</button>
+            </form>
+            <p class="password-error" id="passwordError" style="display: none; color: var(--danger-color); margin-top: 10px;">Incorrect password. Please try again.</p>
         </div>
     </div>
 

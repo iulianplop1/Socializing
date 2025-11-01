@@ -45,97 +45,136 @@ let gameData = {
     }
 };
 
-// Password Protection Configuration
-const SITE_PASSWORD = 'SocialQuest2024'; // Change this to your desired password
-const AUTH_STORAGE_KEY = 'socialquest_authenticated';
-const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-
-// Check if user is authenticated
-function isAuthenticated() {
-    const authData = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!authData) return false;
+// Password Protection System (Obfuscated)
+(function() {
+    'use strict';
     
-    try {
-        const { timestamp } = JSON.parse(authData);
-        const now = Date.now();
-        
-        // Check if session has expired
-        if (now - timestamp > SESSION_TIMEOUT) {
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            return false;
+    // Obfuscated password verification
+    // This uses a simple hash function to avoid storing plaintext password
+    function hashString(str) {
+        let hash = 0;
+        if (str.length === 0) return hash;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
         }
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-// Set authentication status
-function setAuthenticated() {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-        timestamp: Date.now()
-    }));
-}
-
-// Initialize Password Protection
-function initPasswordProtection() {
-    const passwordOverlay = document.getElementById('passwordOverlay');
-    const mainContainer = document.getElementById('mainContainer');
-    const passwordForm = document.getElementById('passwordForm');
-    const passwordInput = document.getElementById('passwordInput');
-    const passwordError = document.getElementById('passwordError');
-    const passwordBox = document.querySelector('.password-box');
-    
-    // Check if already authenticated
-    if (isAuthenticated()) {
-        passwordOverlay.style.display = 'none';
-        mainContainer.style.display = 'block';
-        // Initialize the app if already authenticated
-        initializeApp();
-        return;
+        return Math.abs(hash).toString(16);
     }
     
-    // Show password overlay
-    passwordOverlay.style.display = 'flex';
-    mainContainer.style.display = 'none';
+    // Expected hash (change this to your password's hash)
+    // To set your password: hashString("yourpassword") - replace the value below
+    const expectedHash = 'a1b2c3d4e5f6'; // Replace with hashString("yourpassword")
     
-    // Handle password form submission
-    passwordForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const enteredPassword = passwordInput.value.trim();
+    // Check if already authenticated in this session
+    const sessionKey = 'auth_' + btoa(window.location.href).substring(0, 10);
+    let isAuthenticated = sessionStorage.getItem(sessionKey) === 'true';
+    
+    function verifyPassword(password) {
+        const hash = hashString(password);
+        // Obfuscated comparison
+        const valid = hash === expectedHash;
+        if (valid) {
+            sessionStorage.setItem(sessionKey, 'true');
+            isAuthenticated = true;
+        }
+        return valid;
+    }
+    
+    // Show password modal if not authenticated
+    function initPasswordProtection() {
+        const passwordModal = document.getElementById('passwordModal');
+        const mainContainer = document.getElementById('mainContainer');
+        const passwordForm = document.getElementById('passwordForm');
+        const passwordInput = document.getElementById('passwordInput');
+        const passwordError = document.getElementById('passwordError');
         
-        // Check password (in production, this would be verified via API)
-        if (enteredPassword === SITE_PASSWORD) {
-            setAuthenticated();
-            passwordOverlay.style.display = 'none';
-            mainContainer.style.display = 'block';
-            passwordInput.value = '';
-            passwordError.textContent = '';
+        if (!passwordModal || !mainContainer) return;
+        
+        // Prevent bypass attempts
+        function preventInspection() {
+            // Make it harder to bypass by checking periodically
+            setInterval(() => {
+                if (!isAuthenticated && mainContainer.style.display !== 'none') {
+                    mainContainer.style.display = 'none';
+                    passwordModal.style.display = 'flex';
+                }
+            }, 1000);
             
-            // Initialize the app
-            initializeApp();
+            // Prevent right-click inspection (basic deterrent)
+            document.addEventListener('contextmenu', (e) => {
+                if (!isAuthenticated) {
+                    e.preventDefault();
+                }
+            }, false);
+            
+            // Prevent F12 and other dev tools shortcuts (basic deterrent)
+            document.addEventListener('keydown', (e) => {
+                if (!isAuthenticated) {
+                    // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+                    if (e.key === 'F12' || 
+                        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
+                        (e.ctrlKey && e.key === 'U')) {
+                        e.preventDefault();
+                    }
+                }
+            }, false);
+        }
+        
+        if (!isAuthenticated) {
+            passwordModal.style.display = 'flex';
+            mainContainer.style.display = 'none';
+            
+            passwordForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const password = passwordInput.value;
+                
+                if (verifyPassword(password)) {
+                    passwordModal.style.display = 'none';
+                    mainContainer.style.display = 'block';
+                    passwordError.style.display = 'none';
+                    passwordInput.value = '';
+                } else {
+                    passwordError.style.display = 'block';
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                    // Shake animation
+                    passwordModal.querySelector('.password-modal-content').style.animation = 'shake 0.5s';
+                    setTimeout(() => {
+                        passwordModal.querySelector('.password-modal-content').style.animation = '';
+                    }, 500);
+                }
+            });
+            
+            preventInspection();
         } else {
-            passwordError.textContent = 'Incorrect password. Please try again.';
-            passwordInput.value = '';
-            passwordInput.focus();
-            
-            // Add shake animation
-            if (passwordBox) {
-                passwordBox.style.animation = 'none';
-                setTimeout(() => {
-                    passwordBox.style.animation = 'shake 0.5s ease';
-                }, 10);
-            }
+            passwordModal.style.display = 'none';
+            mainContainer.style.display = 'block';
         }
-    });
+    }
     
-    // Focus on password input
-    passwordInput.focus();
-}
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPasswordProtection);
+    } else {
+        initPasswordProtection();
+    }
+})();
 
-// Initialize App (only called after password is verified)
-function initializeApp() {
-    loadData();
+// Initialize App
+document.addEventListener('DOMContentLoaded', () => {
+    // Only load data if authenticated
+    if (sessionStorage.getItem('auth_' + btoa(window.location.href).substring(0, 10)) === 'true') {
+        loadData();
+    } else {
+        // Wait for authentication before loading
+        const checkAuth = setInterval(() => {
+            if (sessionStorage.getItem('auth_' + btoa(window.location.href).substring(0, 10)) === 'true') {
+                clearInterval(checkAuth);
+                loadData();
+            }
+        }, 100);
+    }
     applyTheme(); // Apply saved theme first
     initializeTabs();
     initializeEventListeners();
@@ -147,11 +186,6 @@ function initializeApp() {
     updateStreak();
     checkReminders();
     requestNotificationPermission();
-}
-
-// Initialize Password Protection on page load
-document.addEventListener('DOMContentLoaded', () => {
-    initPasswordProtection();
 });
 
 // Local Storage
