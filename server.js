@@ -252,8 +252,22 @@ app.post('/api/user/data', requireAuth, async (req, res) => {
     }
 });
 
-// Serve static files (but check auth for index.html)
-app.use(express.static('.'));
+// Serve static files - handle CSS, JS, and other assets
+app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, next) => {
+    const filePath = path.join(__dirname, req.path);
+    res.sendFile(filePath, (err) => {
+        if (err) {
+            console.error('Error serving static file:', req.path, err);
+            res.status(404).send('File not found');
+        }
+    });
+});
+
+// Serve static files using express.static (fallback)
+app.use(express.static(__dirname, {
+    maxAge: '1d',
+    etag: true
+}));
 
 // Health check endpoint (GET request for testing)
 app.get('/api/health', (req, res) => {
