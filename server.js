@@ -85,10 +85,24 @@ Be strict but fair. Don't over-reward simple interactions.`;
         const data = await response.json();
 
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-            throw new Error('Invalid API response');
+            console.error('Invalid API response structure:', JSON.stringify(data, null, 2));
+            throw new Error('Invalid API response: missing candidates or content');
         }
 
-        const text = data.candidates[0].content.parts[0].text;
+        const content = data.candidates[0].content;
+        if (!content.parts || !Array.isArray(content.parts) || content.parts.length === 0) {
+            console.error('Invalid API response: missing or empty parts array');
+            console.error('Response data:', JSON.stringify(data, null, 2));
+            throw new Error('Invalid API response: missing parts in content');
+        }
+
+        const text = content.parts[0].text;
+        
+        if (!text || typeof text !== 'string') {
+            console.error('Invalid API response: missing or invalid text in parts[0]');
+            console.error('Parts:', JSON.stringify(content.parts, null, 2));
+            throw new Error('Invalid API response: missing text in response');
+        }
 
         // Extract JSON from response - try multiple methods
         let result = null;
@@ -97,7 +111,7 @@ Be strict but fair. Don't over-reward simple interactions.`;
         try {
             result = JSON.parse(text.trim());
         } catch (e) {
-            // Method 2: Try to extract JSON object from text
+            // Method 2: Try to extract JSON object from text (handle multi-line)
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 try {
@@ -105,6 +119,14 @@ Be strict but fair. Don't over-reward simple interactions.`;
                 } catch (parseError) {
                     console.error('JSON parse error:', parseError);
                     console.error('Response text:', text);
+                    // Method 3: Try to fix common JSON issues
+                    try {
+                        // Remove markdown code blocks if present
+                        let cleaned = jsonMatch[0].replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                        result = JSON.parse(cleaned);
+                    } catch (fixError) {
+                        console.error('Failed to parse JSON after cleaning:', fixError);
+                    }
                 }
             }
         }
@@ -133,19 +155,30 @@ app.post('/api/generate-quest', async (req, res) => {
     try {
         const { gameData } = req.body;
 
+        // Validate gameData structure
+        if (!gameData) {
+            throw new Error('Missing gameData in request body');
+        }
+
+        // Safely access gameData properties with defaults
+        const allies = gameData.allies || [];
+        const totalRXP = gameData.totalRXP || 0;
+        const interactions = gameData.interactions || [];
+
         const prompt = `Based on this social gaming data, suggest a personalized quest for the player.
 
 Player Stats:
-- Total Allies: ${gameData.allies.length}
-- Total RXP: ${gameData.totalRXP}
-- Recent Interactions: ${gameData.interactions.slice(-5).map(i => {
-    const ally = gameData.allies.find(a => a.id === i.allyId);
-    return `${ally?.name}: ${i.type} (${i.quality})`;
+- Total Allies: ${allies.length}
+- Total RXP: ${totalRXP}
+- Recent Interactions: ${interactions.slice(-5).map(i => {
+    const ally = allies.find(a => a.id === i.allyId);
+    return `${ally?.name || 'Unknown'}: ${i.type || 'interaction'} (${i.quality || 'neutral'})`;
 }).join(', ')}
 
 Allies Info:
-${gameData.allies.slice(0, 5).map(ally => {
-    return `${ally.name}: Bond Level ${getBondLevel(ally.rxp)}, Hobbies: ${ally.hobbies.join(', ')}`;
+${allies.slice(0, 5).map(ally => {
+    const hobbies = Array.isArray(ally.hobbies) ? ally.hobbies.join(', ') : 'None';
+    return `${ally.name || 'Ally'}: Bond Level ${getBondLevel(ally.rxp || 0)}, Hobbies: ${hobbies}`;
 }).join('\n')}
 
 Generate a creative, personalized quest that would help the player improve their social life. 
@@ -189,10 +222,24 @@ Make it specific, actionable, and engaging.`;
         const data = await response.json();
 
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-            throw new Error('Invalid API response');
+            console.error('Invalid API response structure:', JSON.stringify(data, null, 2));
+            throw new Error('Invalid API response: missing candidates or content');
         }
 
-        const text = data.candidates[0].content.parts[0].text;
+        const content = data.candidates[0].content;
+        if (!content.parts || !Array.isArray(content.parts) || content.parts.length === 0) {
+            console.error('Invalid API response: missing or empty parts array');
+            console.error('Response data:', JSON.stringify(data, null, 2));
+            throw new Error('Invalid API response: missing parts in content');
+        }
+
+        const text = content.parts[0].text;
+        
+        if (!text || typeof text !== 'string') {
+            console.error('Invalid API response: missing or invalid text in parts[0]');
+            console.error('Parts:', JSON.stringify(content.parts, null, 2));
+            throw new Error('Invalid API response: missing text in response');
+        }
 
         // Extract JSON from response - try multiple methods
         let result = null;
@@ -201,7 +248,7 @@ Make it specific, actionable, and engaging.`;
         try {
             result = JSON.parse(text.trim());
         } catch (e) {
-            // Method 2: Try to extract JSON object from text
+            // Method 2: Try to extract JSON object from text (handle multi-line)
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 try {
@@ -209,6 +256,14 @@ Make it specific, actionable, and engaging.`;
                 } catch (parseError) {
                     console.error('JSON parse error:', parseError);
                     console.error('Response text:', text);
+                    // Method 3: Try to fix common JSON issues
+                    try {
+                        // Remove markdown code blocks if present
+                        let cleaned = jsonMatch[0].replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                        result = JSON.parse(cleaned);
+                    } catch (fixError) {
+                        console.error('Failed to parse JSON after cleaning:', fixError);
+                    }
                 }
             }
         }
@@ -220,6 +275,7 @@ Make it specific, actionable, and engaging.`;
             });
         } else {
             console.error('Invalid JSON response from API:', text);
+            console.error('Parsed result:', result);
             throw new Error('No valid JSON found in response. API may have returned unexpected format.');
         }
     } catch (error) {
@@ -249,6 +305,7 @@ app.get('/', (req, res) => {
 });
 
 // Export for Vercel serverless functions
+// Export app directly for @vercel/node compatibility
 module.exports = app;
 
 // Start server locally (for development)
