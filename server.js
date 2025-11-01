@@ -84,15 +84,36 @@ Be strict but fair. Don't over-reward simple interactions.`;
 
         const data = await response.json();
 
-        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        if (!data.candidates || !data.candidates[0]) {
             console.error('Invalid API response structure:', JSON.stringify(data, null, 2));
-            throw new Error('Invalid API response: missing candidates or content');
+            throw new Error('Invalid API response: missing candidates');
         }
 
-        const content = data.candidates[0].content;
+        const candidate = data.candidates[0];
+        
+        // Check if response was truncated due to token limit
+        if (candidate.finishReason === 'MAX_TOKENS') {
+            console.warn('Warning: Response was truncated due to MAX_TOKENS limit');
+        }
+
+        // Check if content exists
+        if (!candidate.content) {
+            console.error('Invalid API response: missing content');
+            console.error('Finish reason:', candidate.finishReason);
+            console.error('Response data:', JSON.stringify(data, null, 2));
+            throw new Error(`Invalid API response: missing content (finishReason: ${candidate.finishReason})`);
+        }
+
+        const content = candidate.content;
         if (!content.parts || !Array.isArray(content.parts) || content.parts.length === 0) {
             console.error('Invalid API response: missing or empty parts array');
+            console.error('Finish reason:', candidate.finishReason);
             console.error('Response data:', JSON.stringify(data, null, 2));
+            
+            // If MAX_TOKENS, we might be able to retry with a shorter prompt or different approach
+            if (candidate.finishReason === 'MAX_TOKENS') {
+                throw new Error('Response truncated: Please try again or simplify your request');
+            }
             throw new Error('Invalid API response: missing parts in content');
         }
 
@@ -208,7 +229,7 @@ Make it specific, actionable, and engaging.`;
                     temperature: 0.8,
                     topK: 40,
                     topP: 0.95,
-                    maxOutputTokens: 1024,
+                    maxOutputTokens: 2048,
                 }
             })
         });
@@ -256,15 +277,99 @@ Make it specific, actionable, and engaging.`;
                 } catch (parseError) {
                     console.error('JSON parse error:', parseError);
                     console.error('Response text:', text);
-                    // Method 3: Try to fix common JSON issues
+                    // Method 3: Try to fix truncated JSON by attempting to repair it
                     try {
                         // Remove markdown code blocks if present
                         let cleaned = jsonMatch[0].replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-                        result = JSON.parse(cleaned);
+                        
+                        // Try to repair truncated JSON
+                        // If JSON is cut off, try to close it properly
+                        if (cleaned.length > 0 && !cleaned.endsWith('}')) {
+                            // Count open braces
+                            const openBraces = (cleaned.match(/\{/g) || []).length;
+                            const closeBraces = (cleaned.match(/\}/g) || []).length;
+                            const missingBraces = openBraces - closeBraces;
+                            
+                            // Try to find the last complete field and close the JSON
+                            // Look for last complete string value
+                            const lastCompleteString = cleaned.match(/"[^"]*"\s*:\s*"[^"]*"/g);
+                            if (lastCompleteString && missingBraces > 0) {
+                                // Extract what we have and close it
+                                const lastMatch = lastCompleteString[lastCompleteString.length - 1];
+                                const lastIndex = cleaned.lastIndexOf(lastMatch) + lastMatch.length;
+                                let repaired = cleaned.substring(0, lastIndex);
+                                
+                                // Close any open strings
+                                if (repaired.match(/"\s*$/)) {
+                                    repaired = repaired.replace(/"\s*$/, '"');
+                                }
+                                
+                                // Close any open objects
+                                for (let i = 0; i < missingBraces; i++) {
+                                    repaired += '}';
+                                }
+                                
+                                try {
+                                    result = JSON.parse(repaired);
+                                } catch (repairError) {
+                                    // If repair failed, try with default values
+                                    console.error('Failed to repair truncated JSON:', repairError);
+                                }
+                            }
+                        } else {
+                            result = JSON.parse(cleaned);
+                        }
                     } catch (fixError) {
                         console.error('Failed to parse JSON after cleaning:', fixError);
                     }
                 }
+            }
+        }
+        
+        // If result is still null or incomplete, try to extract partial data
+        if (!result || !result.title || !result.description || typeof result.reward !== 'number') {
+            // Try to extract any valid fields from truncated response
+            // Handle both complete strings and truncated strings
+            const titleMatch = text.match(/"title"\s*:\s*"([^"]*(?:"|$))/);
+            let descMatch = text.match(/"description"\s*:\s*"([^"]*)"/);
+            // If description string is incomplete (not closed), try to get what we have
+            if (!descMatch) {
+                const descStart = text.indexOf('"description"');
+                if (descStart !== -1) {
+                    const afterColon = text.indexOf(':', descStart) + 1;
+                    const afterQuote = text.indexOf('"', afterColon) + 1;
+                    if (afterQuote > afterColon) {
+                        // Get the rest of the text (truncated description)
+                        const remaining = text.substring(afterQuote);
+                        // Take everything up to the next quote or end of string
+                        const descEnd = remaining.search(/"/);
+                        const descText = descEnd > 0 ? remaining.substring(0, descEnd) : remaining.replace(/[^"]*$/, '').trim();
+                        if (descText.length > 0) {
+                            descMatch = [null, descText];
+                        }
+                    }
+                }
+            }
+            const rewardMatch = text.match(/"reward"\s*:\s*(\d+)/);
+            
+            if (titleMatch || descMatch || rewardMatch) {
+                const title = titleMatch && titleMatch[1] ? titleMatch[1] : 'Social Quest';
+                let description = 'Complete a social interaction to earn rewards.';
+                if (descMatch && descMatch[1]) {
+                    description = descMatch[1];
+                    // If description seems incomplete, add note
+                    if (description.length > 0 && !description.endsWith('.') && !description.endsWith('!') && !description.endsWith('?')) {
+                        description += '...';
+                    }
+                    description += ' (response may have been truncated)';
+                }
+                
+                result = {
+                    title: title,
+                    description: description,
+                    reward: rewardMatch ? parseInt(rewardMatch[1]) : 100
+                };
+                console.warn('Using partial data from truncated response');
             }
         }
         
