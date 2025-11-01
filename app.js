@@ -96,9 +96,13 @@ let gameData = {
         function preventInspection() {
             // Make it harder to bypass by checking periodically
             setInterval(() => {
-                if (!isAuthenticated && mainContainer.style.display !== 'none') {
-                    mainContainer.style.display = 'none';
-                    passwordModal.style.display = 'flex';
+                if (!isAuthenticated && mainContainer && passwordModal) {
+                    if (mainContainer.style.display !== 'none') {
+                        mainContainer.style.display = 'none';
+                    }
+                    if (passwordModal.style.display !== 'flex') {
+                        passwordModal.style.display = 'flex';
+                    }
                 }
             }, 1000);
             
@@ -123,8 +127,12 @@ let gameData = {
         }
         
         if (!isAuthenticated) {
-            passwordModal.style.display = 'flex';
-            mainContainer.style.display = 'none';
+            if (passwordModal) {
+                passwordModal.style.display = 'flex';
+            }
+            if (mainContainer) {
+                mainContainer.style.display = 'none';
+            }
             
             if (passwordForm) {
                 passwordForm.addEventListener('submit', (e) => {
@@ -142,23 +150,35 @@ let gameData = {
                     });
                     
                     if (isValid) {
-                        passwordModal.style.display = 'none';
-                        mainContainer.style.display = 'block';
-                        if (passwordError) passwordError.style.display = 'none';
-                        if (passwordInput) passwordInput.value = '';
+                        if (passwordModal) {
+                            passwordModal.style.display = 'none';
+                        }
+                        if (mainContainer) {
+                            mainContainer.style.display = 'block';
+                        }
+                        if (passwordError) {
+                            passwordError.style.display = 'none';
+                        }
+                        if (passwordInput) {
+                            passwordInput.value = '';
+                        }
                     } else {
-                        if (passwordError) passwordError.style.display = 'block';
+                        if (passwordError) {
+                            passwordError.style.display = 'block';
+                        }
                         if (passwordInput) {
                             passwordInput.value = '';
                             passwordInput.focus();
                         }
                         // Shake animation
-                        const modalContent = passwordModal.querySelector('.password-modal-content');
-                        if (modalContent) {
-                            modalContent.style.animation = 'shake 0.5s';
-                            setTimeout(() => {
-                                modalContent.style.animation = '';
-                            }, 500);
+                        if (passwordModal) {
+                            const modalContent = passwordModal.querySelector('.password-modal-content');
+                            if (modalContent) {
+                                modalContent.style.animation = 'shake 0.5s';
+                                setTimeout(() => {
+                                    modalContent.style.animation = '';
+                                }, 500);
+                            }
                         }
                     }
                 });
@@ -166,16 +186,34 @@ let gameData = {
             
             preventInspection();
         } else {
-            passwordModal.style.display = 'none';
-            mainContainer.style.display = 'block';
+            if (passwordModal) {
+                passwordModal.style.display = 'none';
+            }
+            if (mainContainer) {
+                mainContainer.style.display = 'block';
+            }
         }
     }
     
-    // Initialize when DOM is ready
+    // Initialize when DOM is ready - wait a bit to ensure all elements are loaded
+    function initializeProtection() {
+        // Double check elements exist before initializing
+        const passwordModal = document.getElementById('passwordModal');
+        const mainContainer = document.getElementById('mainContainer');
+        
+        if (passwordModal && mainContainer) {
+            initPasswordProtection();
+        } else {
+            // If elements not ready yet, wait a bit and try again
+            setTimeout(initializeProtection, 100);
+        }
+    }
+    
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPasswordProtection);
+        document.addEventListener('DOMContentLoaded', initializeProtection);
     } else {
-        initPasswordProtection();
+        // If DOM already loaded, wait a moment for elements to be available
+        setTimeout(initializeProtection, 100);
     }
 })();
 
