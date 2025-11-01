@@ -21,6 +21,15 @@ app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // For form data
 app.use(express.static('.')); // Serve static files from current directory
 
+// Health check endpoint (GET request for testing)
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        message: 'Backend API is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Proxy endpoint for analyzing interactions
 app.post('/api/analyze-interaction', async (req, res) => {
     try {
