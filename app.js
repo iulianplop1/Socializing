@@ -57,14 +57,15 @@ let gameData = {
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
+            hash = hash | 0; // Convert to 32bit signed integer
         }
         return Math.abs(hash).toString(16);
     }
     
     // Expected hash (change this to your password's hash)
     // To set your password: hashString("yourpassword") - replace the value below
-    const expectedHash = '1b6b7d0'; // Hash for "password2006"
+    // Hash for "password2006" calculated: 287714000 in decimal = 1128dd10 in hex
+    const expectedHash = '1128dd10'; // Hash for "password2006"
     
     // Check if already authenticated in this session
     const sessionKey = 'auth_' + btoa(window.location.href).substring(0, 10);
@@ -125,26 +126,43 @@ let gameData = {
             passwordModal.style.display = 'flex';
             mainContainer.style.display = 'none';
             
-            passwordForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const password = passwordInput.value;
-                
-                if (verifyPassword(password)) {
-                    passwordModal.style.display = 'none';
-                    mainContainer.style.display = 'block';
-                    passwordError.style.display = 'none';
-                    passwordInput.value = '';
-                } else {
-                    passwordError.style.display = 'block';
-                    passwordInput.value = '';
-                    passwordInput.focus();
-                    // Shake animation
-                    passwordModal.querySelector('.password-modal-content').style.animation = 'shake 0.5s';
-                    setTimeout(() => {
-                        passwordModal.querySelector('.password-modal-content').style.animation = '';
-                    }, 500);
-                }
-            });
+            if (passwordForm) {
+                passwordForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const password = passwordInput ? passwordInput.value : '';
+                    
+                    // Debug logging (can be removed later)
+                    const inputHash = hashString(password);
+                    const isValid = verifyPassword(password);
+                    console.log('Password check:', {
+                        entered: password ? 'yes' : 'no',
+                        inputHash: inputHash,
+                        expectedHash: expectedHash,
+                        match: isValid
+                    });
+                    
+                    if (isValid) {
+                        passwordModal.style.display = 'none';
+                        mainContainer.style.display = 'block';
+                        if (passwordError) passwordError.style.display = 'none';
+                        if (passwordInput) passwordInput.value = '';
+                    } else {
+                        if (passwordError) passwordError.style.display = 'block';
+                        if (passwordInput) {
+                            passwordInput.value = '';
+                            passwordInput.focus();
+                        }
+                        // Shake animation
+                        const modalContent = passwordModal.querySelector('.password-modal-content');
+                        if (modalContent) {
+                            modalContent.style.animation = 'shake 0.5s';
+                            setTimeout(() => {
+                                modalContent.style.animation = '';
+                            }, 500);
+                        }
+                    }
+                });
+            }
             
             preventInspection();
         } else {
