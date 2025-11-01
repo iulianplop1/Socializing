@@ -1,12 +1,10 @@
 // Configuration - Backend API endpoints
-// For GitHub Pages deployment, use the deployed backend URL
-// For local development, use the same origin
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction 
-    ? 'https://socializing-lilac.vercel.app' // Your deployed Vercel backend URL
-    : window.location.origin;
+const API_BASE_URL = window.location.origin;
 const API_ANALYZE_URL = `${API_BASE_URL}/api/analyze-interaction`;
 const API_QUEST_URL = `${API_BASE_URL}/api/generate-quest`;
+const API_AUTH_CHECK = `${API_BASE_URL}/api/auth/check`;
+const API_USER_DATA = `${API_BASE_URL}/api/user/data`;
+const API_AUTH_LOGOUT = `${API_BASE_URL}/api/auth/logout`;
 
 // RXP thresholds for bond levels (cumulative)
 const BOND_LEVEL_THRESHOLDS = {
@@ -46,8 +44,15 @@ let gameData = {
 };
 
 // Initialize App
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check authentication first
+    const isAuthenticated = await checkAuthentication();
+    if (!isAuthenticated) {
+        window.location.href = '/';
+        return;
+    }
+    
+    await loadData();
     applyTheme(); // Apply saved theme first
     initializeTabs();
     initializeEventListeners();
@@ -59,41 +64,126 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStreak();
     checkReminders();
     requestNotificationPermission();
+    
+    // Add logout button handler
+    addLogoutButton();
 });
 
-// Local Storage
-function saveData() {
-    localStorage.setItem('socialQuestData', JSON.stringify(gameData));
+// Authentication check
+async function checkAuthentication() {
+    try {
+        const response = await fetch(API_AUTH_CHECK, {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        return data.authenticated === true;
+    } catch (error) {
+        console.error('Auth check failed:', error);
+        return false;
+    }
 }
 
-function loadData() {
-    const saved = localStorage.getItem('socialQuestData');
-    if (saved) {
-        const parsed = JSON.parse(saved);
-        gameData = { ...gameData, ...parsed };
-        // Ensure new fields exist
-        if (!gameData.streak) gameData.streak = { current: 0, lastInteractionDate: null, longest: 0, milestones: [] };
-        if (!gameData.reminders) gameData.reminders = [];
-        if (!gameData.settings) gameData.settings = { soundEnabled: true, notificationsEnabled: false, theme: 'dark' };
+// Add logout functionality
+function addLogoutButton() {
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        const logoutBtn = document.createElement('button');
+        logoutBtn.className = 'btn btn-secondary';
+        logoutBtn.textContent = '🚪 Logout';
+        logoutBtn.title = 'Logout';
+        logoutBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to logout?')) {
+                try {
+                    await fetch(API_AUTH_LOGOUT, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    // Still redirect even if logout fails
+                    window.location.href = '/';
+                }
+            }
+        });
+        headerActions.appendChild(logoutBtn);
+    }
+}
+
+// Backend Storage
+async function saveData() {
+    try {
+        await fetch(API_USER_DATA, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(gameData)
+        });
+    } catch (error) {
+        console.error('Error saving data:', error);
+        // Fallback to localStorage if backend fails
+        localStorage.setItem('socialQuestData', JSON.stringify(gameData));
+    }
+}
+
+async function loadData() {
+    try {
+        const response = await fetch(API_USER_DATA, {
+            credentials: 'include'
+        });
         
-        // Convert date strings back to Date objects
-        gameData.interactions.forEach(interaction => {
-            interaction.date = new Date(interaction.date);
-            if (!interaction.tags) interaction.tags = [];
-            if (!interaction.photos) interaction.photos = [];
-        });
-        gameData.quests.forEach(quest => {
-            if (quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
-        });
-        if (gameData.streak.lastInteractionDate) {
-            gameData.streak.lastInteractionDate = new Date(gameData.streak.lastInteractionDate);
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.data) {
+                gameData = { ...gameData, ...result.data };
+            }
+        } else {
+            // If unauthorized, redirect to login
+            if (response.status === 401) {
+                window.location.href = '/';
+                return;
+            }
+            // Fallback to localStorage
+            const saved = localStorage.getItem('socialQuestData');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                gameData = { ...gameData, ...parsed };
+            }
         }
-        gameData.reminders.forEach(reminder => {
-            if (reminder.date) reminder.date = new Date(reminder.date);
-        });
+    } catch (error) {
+        console.error('Error loading data:', error);
+        // Fallback to localStorage
+        const saved = localStorage.getItem('socialQuestData');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            gameData = { ...gameData, ...parsed };
+        }
     }
     
-    // Load settings
+    // Ensure new fields exist
+    if (!gameData.streak) gameData.streak = { current: 0, lastInteractionDate: null, longest: 0, milestones: [] };
+    if (!gameData.reminders) gameData.reminders = [];
+    if (!gameData.settings) gameData.settings = { soundEnabled: true, notificationsEnabled: false, theme: 'dark' };
+    
+    // Convert date strings back to Date objects
+    gameData.interactions.forEach(interaction => {
+        interaction.date = new Date(interaction.date);
+        if (!interaction.tags) interaction.tags = [];
+        if (!interaction.photos) interaction.photos = [];
+    });
+    gameData.quests.forEach(quest => {
+        if (quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
+    });
+    if (gameData.streak.lastInteractionDate) {
+        gameData.streak.lastInteractionDate = new Date(gameData.streak.lastInteractionDate);
+    }
+    gameData.reminders.forEach(reminder => {
+        if (reminder.date) reminder.date = new Date(reminder.date);
+    });
+    
+    // Load settings (still use localStorage for settings as fallback)
     const settings = localStorage.getItem('socialQuestSettings');
     if (settings) {
         gameData.settings = { ...gameData.settings, ...JSON.parse(settings) };
@@ -1099,6 +1189,9 @@ function initializeNewFeatures() {
 }
 
 function saveSettings() {
+    // Settings are saved as part of gameData
+    saveData();
+    // Also save to localStorage as fallback
     localStorage.setItem('socialQuestSettings', JSON.stringify(gameData.settings));
 }
 
