@@ -64,7 +64,7 @@ let gameData = {
     
     // Expected hash (change this to your password's hash)
     // To set your password: hashString("yourpassword") - replace the value below
-    const expectedHash = 'a1b2c3d4e5f6'; // Replace with hashString("yourpassword")
+    const expectedHash = '1b6b7d0'; // Hash for "password2006"
     
     // Check if already authenticated in this session
     const sessionKey = 'auth_' + btoa(window.location.href).substring(0, 10);
