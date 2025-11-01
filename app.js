@@ -1,5 +1,10 @@
 // Configuration - Backend API endpoints
-const API_BASE_URL = window.location.origin; // Use same origin as frontend
+// For GitHub Pages deployment, use the deployed backend URL
+// For local development, use the same origin
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE_URL = isProduction 
+    ? 'socializing-lilac.vercel.app' // Replace with your actual backend URL
+    : window.location.origin;
 const API_ANALYZE_URL = `${API_BASE_URL}/api/analyze-interaction`;
 const API_QUEST_URL = `${API_BASE_URL}/api/generate-quest`;
 
@@ -533,6 +538,13 @@ async function analyzeInteractionWithAI(notes, type, duration, quality) {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
             console.error('API Error Response:', errorData);
+            
+            // If backend is not available (404/500), use fallback
+            if (response.status === 404 || response.status === 500) {
+                console.warn('Backend API unavailable, using fallback calculation');
+                return calculateRXPFallback(type, duration, quality);
+            }
+            
             throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
         }
         
@@ -546,9 +558,13 @@ async function analyzeInteractionWithAI(notes, type, duration, quality) {
         }
     } catch (error) {
         console.error('AI analysis failed:', error);
-        // Show user-friendly message if API fails
-        if (error.message.includes('fetch') || error.message.includes('Network')) {
-            console.warn('Backend server may not be running. Make sure to start the server with: npm start');
+        
+        // Network errors or CORS issues - use fallback
+        if (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+            console.warn('Cannot connect to backend API. This is normal if deployed to GitHub Pages without a backend server.');
+            console.warn('Using fallback calculation instead.');
+            // Show a subtle notification that fallback is being used (optional)
+            // showToast('Using fallback calculation (AI unavailable)', 'warning');
         }
     }
 
@@ -766,10 +782,10 @@ async function generateAIQuest() {
         }
     } catch (error) {
         console.error('AI quest generation failed:', error);
-        if (error.message.includes('fetch') || error.message.includes('Network')) {
-            alert('Unable to connect to backend server. Make sure the server is running with: npm start');
+        if (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+            showToast('AI quest generation unavailable. Backend server needs to be deployed. See DEPLOYMENT.md for instructions.', 'warning');
         } else {
-            alert('Failed to generate AI quest. Please try again later.');
+            showToast('Failed to generate AI quest. Please try again later.', 'error');
         }
     }
 }

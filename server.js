@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Gemini API configuration
-const GEMINI_API_KEY = 'AIzaSyDRkO31dq3n5R5KUFVbLgEXQF9yXrx455c';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDRkO31dq3n5R5KUFVbLgEXQF9yXrx455c';
 // Using gemini-2.5-flash which is available and supports generateContent
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
