@@ -3,7 +3,7 @@
 // For local development, use the same origin
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE_URL = isProduction 
-    ? 'socializing-lilac.vercel.app' // Replace with your actual backend URL
+    ? 'https://socializing-lilac.vercel.app' // Your deployed Vercel backend URL
     : window.location.origin;
 const API_ANALYZE_URL = `${API_BASE_URL}/api/analyze-interaction`;
 const API_QUEST_URL = `${API_BASE_URL}/api/generate-quest`;

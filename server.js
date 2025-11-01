@@ -239,9 +239,14 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📱 Open http://localhost:${PORT} in your browser`);
-});
+// Export for Vercel serverless functions
+module.exports = app;
+
+// Start server locally (for development)
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+        console.log(`📱 Open http://localhost:${PORT} in your browser`);
+    });
+}
 
