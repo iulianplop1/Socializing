@@ -913,16 +913,32 @@ async function checkAndGenerateQuests() {
     // Generate weekly quests if needed
     generateWeeklyQuests();
 
-    // Use AI to generate contextual quests
-    if (!gameData.lastQuestGeneration || 
-        (Date.now() - new Date(gameData.lastQuestGeneration).getTime()) > 86400000) {
-        await generateAIQuest();
-        gameData.lastQuestGeneration = new Date().toISOString();
-        saveData();
+    // Use AI to generate contextual quests (only if it's been more than 24 hours)
+    try {
+        if (!gameData.lastQuestGeneration) {
+            // First time - generate a quest
+            await generateAIQuest(true); // Pass true to suppress notification
+            gameData.lastQuestGeneration = new Date().toISOString();
+            saveData();
+        } else {
+            const lastGenTime = new Date(gameData.lastQuestGeneration).getTime();
+            const timeSinceLastGen = Date.now() - lastGenTime;
+            const oneDayInMs = 86400000; // 24 hours in milliseconds
+            
+            // Only generate if it's been more than 24 hours
+            if (timeSinceLastGen > oneDayInMs && !isNaN(lastGenTime)) {
+                await generateAIQuest();
+                gameData.lastQuestGeneration = new Date().toISOString();
+                saveData();
+            }
+        }
+    } catch (error) {
+        // Silently fail - don't show errors on automatic generation
+        console.log('Auto quest generation skipped:', error.message);
     }
 }
 
-async function generateAIQuest() {
+async function generateAIQuest(suppressNotification = false) {
     try {
         const response = await fetch(API_QUEST_URL, {
             method: 'POST',
@@ -959,7 +975,10 @@ async function generateAIQuest() {
             gameData.quests.push(quest);
             saveData();
             renderQuests();
-            alert('Quest generated successfully!');
+            // Only show notification if not suppressed (suppress for auto-generation on page load)
+            if (!suppressNotification) {
+                showToast('🎯 New AI quest generated!', 'success');
+            }
         } else {
             throw new Error('Invalid API response');
         }
