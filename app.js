@@ -292,6 +292,30 @@ function saveData() {
     saveSyncTimer = setTimeout(syncSaveToCloud, SAVE_DEBOUNCE_MS);
 }
 
+function rehydrateGameData(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    // Ensure required containers
+    if (!obj.streak) obj.streak = { current: 0, lastInteractionDate: null, longest: 0, milestones: [] };
+    if (!obj.reminders) obj.reminders = [];
+    if (!obj.settings) obj.settings = { soundEnabled: true, notificationsEnabled: false, theme: 'dark' };
+    if (!Array.isArray(obj.allies)) obj.allies = [];
+    if (!Array.isArray(obj.interactions)) obj.interactions = [];
+    if (!Array.isArray(obj.quests)) obj.quests = [];
+
+    // Rehydrate dates
+    obj.interactions.forEach(interaction => {
+        if (interaction && interaction.date) interaction.date = new Date(interaction.date);
+        if (interaction && !interaction.tags) interaction.tags = [];
+        if (interaction && !interaction.photos) interaction.photos = [];
+    });
+    obj.quests.forEach(quest => {
+        if (quest && quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
+    });
+    if (obj.streak && obj.streak.lastInteractionDate) {
+        obj.streak.lastInteractionDate = new Date(obj.streak.lastInteractionDate);
+    }
+}
+
 // Load from Local Storage first, then try to pull latest from cloud and merge
 async function loadData() {
     const saved = localStorage.getItem('socialQuestData');
@@ -338,18 +362,7 @@ async function loadData() {
                 interactions: Array.isArray(cloud.interactions) ? cloud.interactions : gameData.interactions,
                 quests: Array.isArray(cloud.quests) ? cloud.quests : gameData.quests,
             };
-            // Rehydrate dates
-            gameData.interactions.forEach(interaction => {
-                interaction.date = new Date(interaction.date);
-                if (!interaction.tags) interaction.tags = [];
-                if (!interaction.photos) interaction.photos = [];
-            });
-            gameData.quests.forEach(quest => {
-                if (quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
-            });
-            if (gameData.streak && gameData.streak.lastInteractionDate) {
-                gameData.streak.lastInteractionDate = new Date(gameData.streak.lastInteractionDate);
-            }
+            rehydrateGameData(gameData);
             // Persist merged version locally
             localStorage.setItem('socialQuestData', JSON.stringify(gameData));
         }
@@ -2045,7 +2058,13 @@ window.openPhotoModal = function(photoSrc) {
 
 // Export/Import
 function exportJSON() {
-    const dataStr = JSON.stringify(gameData, null, 2);
+    const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        clientId: getOrCreateClientId(),
+        data: gameData
+    };
+    const dataStr = JSON.stringify(payload, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
@@ -2082,11 +2101,16 @@ function importData(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const imported = JSON.parse(e.target.result);
+            const raw = JSON.parse(e.target.result);
+            // Support both wrapped { version, data } and legacy direct gameData export
+            const imported = raw && raw.data ? raw.data : raw;
+            if (!imported || typeof imported !== 'object') throw new Error('Invalid backup format');
             if (confirm('This will replace all current data. Are you sure?')) {
                 gameData = { ...gameData, ...imported };
-                loadData(); // Re-process dates
-                saveData();
+                rehydrateGameData(gameData);
+                // Persist locally and to cloud
+                localStorage.setItem('socialQuestData', JSON.stringify(gameData));
+                saveData(); // triggers debounced cloud sync
                 updateUI();
                 showToast('Data imported successfully!', 'success');
                 triggerConfetti();
