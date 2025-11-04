@@ -244,12 +244,44 @@ document.addEventListener('DOMContentLoaded', () => {
     requestNotificationPermission();
 });
 
-// Local Storage
-function saveData() {
-    localStorage.setItem('socialQuestData', JSON.stringify(gameData));
+// --- Cloud sync (Supabase via backend) ---
+function getOrCreateClientId() {
+    let id = localStorage.getItem('socialQuestClientId');
+    if (!id) {
+        id = 'c_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('socialQuestClientId', id);
+    }
+    return id;
 }
 
-function loadData() {
+let saveSyncTimer = null;
+const SAVE_DEBOUNCE_MS = 1500;
+
+async function syncSaveToCloud() {
+    try {
+        const clientId = getOrCreateClientId();
+        await fetch(`${API_BASE_URL}/api/user/data`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-client-id': clientId,
+            },
+            body: JSON.stringify({ data: gameData })
+        });
+    } catch (e) {
+        console.warn('Cloud save skipped:', e.message);
+    }
+}
+
+// Local Storage + Debounced Cloud Save
+function saveData() {
+    localStorage.setItem('socialQuestData', JSON.stringify(gameData));
+    if (saveSyncTimer) clearTimeout(saveSyncTimer);
+    saveSyncTimer = setTimeout(syncSaveToCloud, SAVE_DEBOUNCE_MS);
+}
+
+// Load from Local Storage first, then try to pull latest from cloud and merge
+async function loadData() {
     const saved = localStorage.getItem('socialQuestData');
     if (saved) {
         const parsed = JSON.parse(saved);
@@ -275,7 +307,44 @@ function loadData() {
             if (reminder.date) reminder.date = new Date(reminder.date);
         });
     }
-    
+
+    // Try to fetch from cloud and merge (prefer cloud on conflicts)
+    try {
+        const clientId = getOrCreateClientId();
+        const res = await fetch(`${API_BASE_URL}/api/user/data?clientId=${encodeURIComponent(clientId)}`);
+        const json = await res.json();
+        if (json && json.success && json.data) {
+            // Merge: cloud data wins, but keep in-memory defaults for missing fields
+            const cloud = json.data;
+            gameData = {
+                ...gameData,
+                ...cloud,
+                streak: cloud.streak || gameData.streak,
+                reminders: cloud.reminders || gameData.reminders,
+                settings: cloud.settings || gameData.settings,
+                allies: Array.isArray(cloud.allies) ? cloud.allies : gameData.allies,
+                interactions: Array.isArray(cloud.interactions) ? cloud.interactions : gameData.interactions,
+                quests: Array.isArray(cloud.quests) ? cloud.quests : gameData.quests,
+            };
+            // Rehydrate dates
+            gameData.interactions.forEach(interaction => {
+                interaction.date = new Date(interaction.date);
+                if (!interaction.tags) interaction.tags = [];
+                if (!interaction.photos) interaction.photos = [];
+            });
+            gameData.quests.forEach(quest => {
+                if (quest.generatedDate) quest.generatedDate = new Date(quest.generatedDate);
+            });
+            if (gameData.streak && gameData.streak.lastInteractionDate) {
+                gameData.streak.lastInteractionDate = new Date(gameData.streak.lastInteractionDate);
+            }
+            // Persist merged version locally
+            localStorage.setItem('socialQuestData', JSON.stringify(gameData));
+        }
+    } catch (e) {
+        console.log('Cloud load skipped:', e.message);
+    }
+
     // Load settings
     const settings = localStorage.getItem('socialQuestSettings');
     if (settings) {
