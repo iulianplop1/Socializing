@@ -121,6 +121,57 @@ app.post('/api/user/data', async (req, res) => {
     }
 });
 
+// API: Upload ally image to Supabase Storage and return a public URL
+app.post('/api/upload-image', async (req, res) => {
+    try {
+        if (!supabase) {
+            return res.status(500).json({ success: false, error: 'Supabase is not configured on the server' });
+        }
+        const clientId = getClientIdFromRequest(req);
+        const { imageData, allyId } = req.body || {};
+
+        if (!clientId) return res.status(400).json({ success: false, error: 'Missing clientId' });
+        if (!imageData || typeof imageData !== 'string' || !imageData.startsWith('data:image')) {
+            return res.status(400).json({ success: false, error: 'Missing or invalid imageData' });
+        }
+
+        // Extract mime/type and base64
+        const match = imageData.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.*)$/);
+        if (!match) return res.status(400).json({ success: false, error: 'Unsupported image format' });
+        const mime = match[1];
+        const base64 = match[2];
+        const buffer = Buffer.from(base64, 'base64');
+
+        // Choose extension by mime
+        const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+        const filename = `${clientId}/${allyId || 'ally'}_${Date.now()}.${ext}`;
+
+        // Ensure bucket exists manually in Supabase console: 'ally-images' (public)
+        const { error: uploadError } = await supabase
+            .storage
+            .from('ally-images')
+            .upload(filename, buffer, {
+                contentType: mime,
+                upsert: true
+            });
+        if (uploadError) {
+            console.error('Supabase storage upload error:', uploadError);
+            return res.status(500).json({ success: false, error: 'Storage upload failed' });
+        }
+
+        const { data: publicUrlData } = supabase
+            .storage
+            .from('ally-images')
+            .getPublicUrl(filename);
+        const publicUrl = publicUrlData?.publicUrl;
+
+        return res.json({ success: true, url: publicUrl });
+    } catch (e) {
+        console.error('POST /api/upload-image failed:', e);
+        return res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
 // Health check endpoint (GET request for testing)
 app.get('/api/health', (req, res) => {
     res.json({ 

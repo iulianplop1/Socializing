@@ -1,10 +1,5 @@
-// Configuration - Backend API endpoints
-// For GitHub Pages deployment, use the deployed backend URL
-// For local development, use the same origin
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction 
-    ? 'https://socializing-lilac.vercel.app' // Your deployed Vercel backend URL
-    : window.location.origin;
+// Configuration - Backend API endpoints (hardcoded to Vercel backend)
+const API_BASE_URL = 'https://socializing-lilac.vercel.app';
 const API_ANALYZE_URL = `${API_BASE_URL}/api/analyze-interaction`;
 const API_QUEST_URL = `${API_BASE_URL}/api/generate-quest`;
 
@@ -597,7 +592,7 @@ function saveAlly() {
     }
 }
 
-function finalizeSave(id, name, age, hobbies, likes, dislikes, otherInfo, imageData) {
+async function finalizeSave(id, name, age, hobbies, likes, dislikes, otherInfo, imageData) {
     if (id) {
         // Edit existing
         const ally = gameData.allies.find(a => a.id === id);
@@ -612,9 +607,24 @@ function finalizeSave(id, name, age, hobbies, likes, dislikes, otherInfo, imageD
         ally.otherInfo = otherInfo;
         
         // Handle image: only update if explicitly changed
-        if (imageData !== null && (imageData.startsWith('data:image'))) {
-            // New image uploaded or existing image shown
-            ally.image = imageData;
+        if (imageData !== null && (typeof imageData === 'string') && imageData.startsWith('data:image')) {
+            // Upload to backend to store in Supabase Storage
+            try {
+                const clientId = getOrCreateClientId();
+                const res = await fetch(`${API_BASE_URL}/api/upload-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
+                    body: JSON.stringify({ imageData, allyId: id })
+                });
+                const json = await res.json();
+                if (json && json.success && json.url) {
+                    ally.image = json.url;
+                } else {
+                    ally.image = imageData; // fallback to data URL if upload fails
+                }
+            } catch (e) {
+                ally.image = imageData; // fallback
+            }
         } else if (previewDisplay === 'none' && !document.getElementById('allyImage').files.length) {
             // Image preview was hidden and no new file selected - remove image
             ally.image = null;
@@ -630,10 +640,29 @@ function finalizeSave(id, name, age, hobbies, likes, dislikes, otherInfo, imageD
             likes,
             dislikes,
             otherInfo,
-            image: imageData || null,
+            image: null,
             rxp: 0,
             createdAt: new Date().toISOString()
         };
+        // If we have a new image, upload it first and store the URL
+        if (imageData && typeof imageData === 'string' && imageData.startsWith('data:image')) {
+            try {
+                const clientId = getOrCreateClientId();
+                const res = await fetch(`${API_BASE_URL}/api/upload-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
+                    body: JSON.stringify({ imageData, allyId: newAlly.id })
+                });
+                const json = await res.json();
+                if (json && json.success && json.url) {
+                    newAlly.image = json.url;
+                } else {
+                    newAlly.image = imageData; // fallback
+                }
+            } catch (e) {
+                newAlly.image = imageData; // fallback
+            }
+        }
         gameData.allies.push(newAlly);
     }
 
