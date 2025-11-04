@@ -246,6 +246,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Cloud sync (Supabase via backend) ---
 function getOrCreateClientId() {
+    // Allow overriding via URL param ?sync=YOUR_CODE (persists to localStorage)
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const urlSync = params.get('sync');
+        if (urlSync && urlSync.trim()) {
+            const cleaned = urlSync.trim();
+            localStorage.setItem('socialQuestSyncId', cleaned);
+        }
+    } catch (_) {}
+
+    // Prefer explicit sync id if present
+    let syncId = localStorage.getItem('socialQuestSyncId');
+    if (syncId && syncId.trim()) {
+        return syncId.trim();
+    }
+
+    // Fallback to generated client id
     let id = localStorage.getItem('socialQuestClientId');
     if (!id) {
         id = 'c_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
