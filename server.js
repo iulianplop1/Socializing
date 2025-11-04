@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,105 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // For form data
 app.use(express.static('.')); // Serve static files from current directory
+
+// Supabase configuration (server-side)
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zlrdcfeowhlteklnllxc.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY; // support both var names
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+function getDefaultGameData() {
+    return {
+        socialLevel: 1,
+        totalRXP: 0,
+        allies: [],
+        interactions: [],
+        quests: [],
+        achievements: [],
+        lastQuestGeneration: null,
+        streak: {
+            current: 0,
+            lastInteractionDate: null,
+            longest: 0,
+            milestones: []
+        },
+        reminders: [],
+        settings: {
+            soundEnabled: true,
+            notificationsEnabled: false,
+            theme: 'dark'
+        }
+    };
+}
+
+// Helpers for fetching clientId from request
+function getClientIdFromRequest(req) {
+    return (req.query.clientId || req.headers['x-client-id'] || (req.body && req.body.clientId) || '').toString();
+}
+
+// API: Load user data from Supabase (Option A - keep current frontend)
+app.get('/api/user/data', async (req, res) => {
+    try {
+        if (!supabase) {
+            return res.status(500).json({ success: false, error: 'Supabase is not configured on the server' });
+        }
+        const clientId = getClientIdFromRequest(req);
+        if (!clientId) {
+            return res.status(400).json({ success: false, error: 'Missing clientId' });
+        }
+
+        const { data, error } = await supabase
+            .from('user_data')
+            .select('data')
+            .eq('client_id', clientId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Supabase select error:', error);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+
+        const payload = data && data.data ? data.data : getDefaultGameData();
+        return res.json({ success: true, data: payload });
+    } catch (e) {
+        console.error('GET /api/user/data failed:', e);
+        return res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+// API: Save user data to Supabase
+app.post('/api/user/data', async (req, res) => {
+    try {
+        if (!supabase) {
+            return res.status(500).json({ success: false, error: 'Supabase is not configured on the server' });
+        }
+        const clientId = getClientIdFromRequest(req);
+        const payload = req.body && (req.body.data || req.body);
+
+        if (!clientId) {
+            return res.status(400).json({ success: false, error: 'Missing clientId' });
+        }
+        if (!payload || typeof payload !== 'object') {
+            return res.status(400).json({ success: false, error: 'Missing or invalid data payload' });
+        }
+
+        const { error } = await supabase
+            .from('user_data')
+            .upsert({ client_id: clientId, data: payload, updated_at: new Date().toISOString() }, { onConflict: 'client_id' });
+
+        if (error) {
+            console.error('Supabase upsert error:', error);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+
+        return res.json({ success: true, message: 'Data saved successfully' });
+    } catch (e) {
+        console.error('POST /api/user/data failed:', e);
+        return res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
 
 // Health check endpoint (GET request for testing)
 app.get('/api/health', (req, res) => {
